@@ -1,0 +1,262 @@
+sensor:
+
+    ####################################################
+    #                                                  #
+    #                     SENSOR                       #
+    #                                                  #
+    ####################################################
+
+  - platform: version
+    name: hass_version_installed
+    source: local
+
+  - platform: version
+    name: hass_version_latest
+    source: container
+
+  - platform: version
+    name: hass_version_latest_beta
+    source: container
+    beta: true
+
+  - platform: file
+    file_path: vacuum_last_cleaned.txt
+    name: vacuum_last_cleaned
+
+  - platform: filesize
+    file_paths:
+      - /config/home-assistant.log
+
+  - platform: sql
+    db_url: !secret recorder_db_url
+    queries:
+      - name: Databas
+        query: >
+          SELECT table_schema "database", Round(Sum(data_length + index_length) / POWER(1024,2), 1) 
+          "value" FROM information_schema.tables WHERE table_schema="homeassistant" GROUP BY table_schema;
+        column: value
+        unit_of_measurement: MB
+
+  - platform: systemmonitor
+    resources:
+      - type: disk_use_percent
+        arg: /
+      - type: memory_use_percent
+      - type: processor_use
+      - type: last_boot
+
+  - platform: uptime
+
+  - platform: time_date
+    display_options:
+      - time
+      - date
+
+  - platform: netdata
+    host: !secret netdata_host
+    port: !secret netdata_port
+    name: netdata_imac
+    resources:
+      cpu_user:
+        data_group: system.cpu
+        element: user
+      cpu_system:
+        data_group: system.cpu
+        element: system
+      ram_free:
+        data_group: system.ram
+        element: free
+      uptime:
+        data_group: system.uptime
+        element: uptime
+      disk_system:
+        data_group: disk_space./
+        element: avail
+      disk_macintosh_hd:
+        data_group: disk_space./Volumes/Macintosh HD
+        element: avail
+    scan_interval: 86400
+    # code /usr/local/etc/netdata/netdata.conf
+    # bind to = 0.0.0.0
+    # http://localhost:19999/api/v1/allmetrics?format=json
+
+  - platform: unifigateway
+    username: !secret unifi_username
+    password: !secret unifi_password
+    host: !secret unifi_host
+    version: UDMP-unifiOS
+    monitored_conditions:
+      - firmware
+      - wan
+
+  - platform: rest
+    name: valetudo_version_latest
+    resource: https://api.github.com/repos/Hypfer/Valetudo/releases/latest
+    authentication: basic
+    username: !secret github_username
+    password: !secret github_access_token
+    value_template: >
+      {{ value_json.tag_name }}
+    scan_interval: 86400
+
+  - platform: rest
+    name: esphome_version_latest
+    resource: https://api.github.com/repos/esphome/esphome/releases/latest
+    value_template: >
+      {{ value_json.tag_name }}
+    scan_interval: 86400
+
+  - platform: scrape
+    name: synology_dsm_latest
+    resource: https://www.synology.com/en-global/releaseNote/DSM
+    select: >
+      #release_notes_content > div:first-child > h3
+    value_template: >
+      {{ value.split(' ')[1] }}
+    scan_interval: 86400
+
+  - platform: command_line
+    name: kemper_version
+    command: !secret kemper_version
+    value_template: >
+      {{ value_json.profiler_installed == value_json.profiler_latest and 
+      value_json.rigmanager_latest == value_json.rigmanager_installed }}
+    json_attributes:
+      - profiler_latest
+      - profiler_installed
+      - rigmanager_latest
+      - rigmanager_installed
+    scan_interval: 86400
+
+  - platform: rest
+    name: playactor_version_latest
+    resource: https://api.github.com/repos/dhleong/playactor/releases/latest
+    value_template: >
+      {{ value_json.tag_name }}
+    scan_interval: 86400
+
+  - platform: command_line
+    name: playactor_version_installed
+    scan_interval: 86400
+    command: !secret playactor_version_installed
+    value_template: >
+      {{ value.split(' ')[1].split('v')[1] }}
+
+  - platform: rest
+    name: tibber_daily_consumption
+    resource: https://api.tibber.com/v1-beta/gql
+    headers:
+      Authorization: !secret tibber_token
+      Content-Type: application/json
+    method: POST
+    payload: >
+      {"query": "{viewer {homes {consumption(resolution: DAILY, last: 5, filterEmptyNodes: true) {nodes {from to cost consumption }}}}}"}
+    value_template: >
+      {{ value_json.data.viewer.homes[0].consumption.nodes[-1].consumption }}
+    json_attributes_path: $.data.viewer.homes[0].consumption.nodes[-1:]
+    json_attributes:
+      - from
+      - to
+      - cost
+    device_class: energy
+    unit_of_measurement: kWh
+    scan_interval: 21600
+
+  - platform: rest
+    name: covid_19_folkhalsomyndigheten
+    resource: https://www.arcgis.com/sharing/rest/content/items/2dc63e26f509468f896ec69476b0dab3/data
+    value_template: >
+      {{ 'Otillgänglig' if value_json.embedCode == '' else 'Tillgänglig' }}
+    json_attributes_path: $.widgets.widget_1.config
+    json_attributes: [embedCode]
+    scan_interval: 21600
+
+  - platform: rest
+    name: skanetrafiken
+    resource: !secret skanetrafiken
+    value_template: >
+      {{ value_json.Trip[0].LegList.Leg[1].Product.num }}
+    json_attributes_path: $.Trip[0].LegList.Leg[1].Origin
+    json_attributes:
+      - name
+      - time
+      - date
+    scan_interval: 268
+
+  - platform: rest
+    name: hass_release_notes
+    resource: https://api.github.com/repos/home-assistant/core/releases/latest
+    value_template: >
+      {{ value_json.name }}
+    json_attributes:
+      - body
+    scan_interval: 21600
+
+  - platform: rest
+    name: hass_release_notes_rc
+    resource: https://api.github.com/repos/home-assistant/core/releases?per_page=1
+    value_template: >
+      {{ value_json[0].name }}
+    json_attributes:
+      - body
+    scan_interval: 21600
+
+  - platform: dnsip
+
+  - platform: darksky
+    api_key: !secret darksky_api_key
+    language: sv
+    monitored_conditions:
+      - temperature
+      - apparent_temperature
+      - precip_probability
+
+  - platform: rest
+    name: docker_cpu
+    resource: !secret ha_dockermon_cpu
+    value_template: >
+      {% set cpuDelta = value_json.cpu_stats.cpu_usage.total_usage - value_json.precpu_stats.cpu_usage.total_usage %}
+      {% set systemDelta = value_json.cpu_stats.system_cpu_usage - value_json.precpu_stats.system_cpu_usage %}
+      {{ (cpuDelta / systemDelta * value_json.cpu_stats.cpu_usage.percpu_usage | length * 100) | round(1) }}
+    json_attributes:
+      - cpu_stats
+      - precpu_stats
+      - memory_stats
+
+  - platform: plex_recently_added
+    token: !secret plex_token
+    host: !secret plex_host
+    port: !secret plex_port
+    max: 1
+    img_dir: /
+    image_resolution: 500
+
+  - platform: waste_collection_schedule
+    name: Sophämtning
+    value_template: >
+      {{ value.types | join(', ') + ' ' }}
+      {% if value.daysTo == 0 %}
+        idag
+      {% elif value.daysTo == 1 %}
+        imorgon
+      {% elif value.daysTo == 2 %}
+        i övermorgon
+      {% else %}
+        om {{ value.daysTo }} dagar
+      {% endif %}
+
+  - platform: command_line
+    name: switchbot_battery
+    command: !secret switchbot_battery
+    unit_of_measurement: '%'
+    scan_interval: 259200
+
+  - platform: command_line
+    name: imac_ip
+    command: !secret imac_ip
+    scan_interval: 86400
+
+  - platform: command_line
+    name: monitors_volume
+    command: !secret monitors_update_volume
+    scan_interval: 86400

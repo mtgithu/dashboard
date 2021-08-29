@@ -1,0 +1,1071 @@
+automation:
+
+    ####################################################
+    #                                                  #
+    #                   AUTOMATIONS                    #
+    #                                                  #
+    ####################################################
+
+  - alias: homeassistant_start
+    id: '7426848686945'
+    initial_state: true
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: browser_mod.close_popup
+      - delay:
+          seconds: 1
+      - service: frontend.reload_themes
+      - delay:
+          seconds: 10
+      - choose:
+        - conditions:
+            - condition: state
+              entity_id:
+                - media_player.sony_bravia_tv
+                - media_player.samsung_tv
+                - media_player.spotify
+                - media_player.kok
+              state: 'off'
+          sequence:
+            - service: input_select.select_option
+              data:
+                entity_id: input_select.conditional_media
+                option: Senast nedladdat
+      - delay:
+          seconds: 10
+      - service: fullykiosk.load_start_url
+        data:
+          entity_id: media_player.galaxy_tab_a_media_player
+      - choose:
+        - conditions:
+            - condition: state
+              entity_id: light.hall
+              state: 'off'
+          sequence:
+            - service: switch.turn_on
+              entity_id: switch.galaxy_tab_a_screensaver
+
+  - alias: balcony_on
+    id: '6204571795721'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.wemo_motion
+        from: 'off'
+        to: 'on'
+    condition:
+      - condition: state
+        entity_id: sun.sun
+        state: below_horizon
+    action:
+      - service: switch.turn_on
+        entity_id: switch.deltaco_sh_p01
+
+  - alias: balcony_off
+    id: '0946556295386'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.wemo_motion
+        from: 'on'
+        to: 'off'
+        for:
+          minutes: 30
+    action:
+      - service: switch.turn_off
+        entity_id: switch.deltaco_sh_p01
+
+  - alias: lovelace_updated_ignore
+    id: '9381519720051'
+    mode: restart
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: lovelace_updated
+    action:
+      - service: browser_mod.toast
+        data:
+          duration: 1
+          message: ' '
+
+  - alias: clear_log_filesize
+    id: '3331821824310'
+    initial_state: true
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.home_assistant_log
+        above: 50
+    action:
+      - service: shell_command.ha_purge_logs
+
+  - alias: tv_on_lights
+    id: '6657050215613'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: media_player.sony_bravia_tv
+        from: 'off'
+        to: 'on'
+    action:
+      - service: light.turn_on
+        entity_id: light.tv
+
+  - alias: no_motion_bathroom
+    id: '9936892396917'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.sensor_badrum_motion
+        to: 'off'
+        for:
+          minutes: 30
+    action:
+      - service: light.turn_off
+        data:
+          entity_id: light.badrum
+
+    ####################################################
+    #                                                  #
+    #                  NOTIFICATIONS                   #
+    #                                                  #
+    ####################################################
+
+  - alias: toast
+    id: '3900676590344'
+    mode: parallel
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.sensor_garderob_motion
+          - binary_sensor.sensor_badrum_motion
+          - binary_sensor.wemo_motion
+        from: 'off'
+        to: 'on'
+    action:
+      - service: browser_mod.toast
+        data:
+          duration: 8000
+          message: >
+            Rörelse detekterat i {{ trigger.to_state.name }}
+
+  - alias: macos_notification_motion_hall
+    id: '4135668040301'
+    initial_state: false
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.sensor_hall_motion
+        from: 'off'
+        to: 'on'
+    condition:
+      - condition: state
+        entity_id: switch.computer_imac
+        state: 'on'
+    action:
+      - service: shell_command.imac_notify_motion_hall
+
+  - alias: ios_notify_hass_update
+    id: '7958228563778'
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.updater
+        from: 'off'
+        to: 'on'
+    action:
+      - service: notify.mobile_app_mattias_iphone_ios
+        data:
+          title: >
+            {{ state_attr('binary_sensor.updater', 'newest_version') }} tillgänglig {{ '\U0001F389' }}
+          message: Håll in för att uppdatera
+          data:
+            data:
+              url: https://www.home-assistant.io/latest-release-notes/
+            push:
+              category: ios_hass
+
+  - alias: ios_notify_hass_update_action
+    id: '0694774018396'
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: ios.notification_action_fired
+        event_data:
+          actionName: START_WATCHTOWER
+    action:
+      - service: switch.turn_on
+        entity_id: switch.watchtower
+
+  - alias: notify_and_remove_completed_torrent
+    id: '7876919385611'
+    mode: parallel
+    max: 25
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: transmission_downloaded_torrent
+    action:
+      - service: notify.mobile_app_mattias_iphone_ios
+        data:
+          title: Torrent nedladdad
+          message: >
+            {{ trigger.event.data.name }}
+      - service: transmission.stop_torrent
+        data:
+          name: Transmission
+          id: >
+            {{ trigger.event.data.id }}
+      - delay:
+          minutes: 15
+      - service: transmission.remove_torrent
+        data:
+          name: Transmission
+          id: >
+            {{ trigger.event.data.id }}
+
+  - alias: ios_notify_tablet_unplugged
+    id: '3972668118831'
+    initial_state: true
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.galaxy_tab_a_battery_level
+        below: 50
+    action:
+      - service: notify.mobile_app_mattias_iphone_ios
+        data:
+          title: >
+            Ladda väggplattan...
+          message: >
+            Batteri {{ states(trigger.entity_id) }}%
+
+    ####################################################
+    #                                                  #
+    #                  SCAN INTERVAL                   #
+    #                                                  #
+    ####################################################
+
+  - alias: conditional_scan_interval
+    id: '0007659752611'
+    initial_state: true
+    trigger:
+      - platform: time_pattern
+        minutes: /5
+      - platform: state
+        entity_id: switch.computer_imac
+        from: 'off'
+        to: 'on'
+    condition:
+      - condition: state
+        entity_id: switch.computer_imac
+        state: 'on'
+    action:
+      - service: homeassistant.update_entity
+        entity_id:
+          - sensor.netdata_imac_cpu_system
+          - sensor.netdata_imac_cpu_user
+          - sensor.netdata_imac_ram_free
+          - sensor.netdata_imac_disk_system
+          - sensor.netdata_imac_disk_macintosh_hd
+          - sensor.netdata_imac_uptime
+          - sensor.imac_ip
+          - sensor.monitors_volume
+          - binary_sensor.monitors_mute_state
+
+  - alias: update_hass_release_notes
+    id: '4289040658246'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.hass_version_latest
+          - sensor.hass_version_latest_beta
+    action:
+      - service: homeassistant.update_entity
+        entity_id:
+          - sensor.hass_release_notes
+          - sensor.hass_release_notes_rc
+
+  - alias: update_synology_latest_version_tag
+    id: '3362185698381'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.nas_update_available
+        from: 'off'
+        to: 'on'
+    action:
+      - service: homeassistant.update_entity
+        entity_id:
+          - sensor.synology_dsm_latest
+
+    ####################################################
+    #                                                  #
+    #                     MONITORS                     #
+    #                                                  #
+    ####################################################
+
+  - alias: monitors_volume_slider
+    id: '0022255594357'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: input_number.monitors_volume
+    condition:
+      - condition: state
+        entity_id: switch.computer_imac
+        state: 'on'
+    action:
+      - service: shell_command.monitors_volume_slider
+      - service: homeassistant.update_entity
+        entity_id: binary_sensor.monitors_mute_state
+      - service: homeassistant.update_entity
+        entity_id: sensor.monitors_volume
+
+  - alias: monitors_volume_update
+    id: '1275485733091'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: sensor.monitors_volume
+    condition:
+      - condition: state
+        entity_id: switch.computer_imac
+        state: 'on'
+    action:
+      - service: homeassistant.update_entity
+        entity_id: binary_sensor.monitors_mute_state
+      - service: input_number.set_value
+        data:
+          entity_id: input_number.monitors_volume
+          value: >
+            {% set max_volume = 75 %} {% set min_volume = 7 %}
+            {% if states(trigger.entity_id) | int > max_volume %}
+              {{ max_volume }}
+            {% elif states(trigger.entity_id) | int < min_volume %}
+              {{ min_volume }}
+            {% else %}
+              {{ states(trigger.entity_id) }}
+            {% endif %}
+
+  - alias: eq_calibration
+    id: '7780410156815'
+    mode: queued
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: switch.wemo_monitors
+        from:
+          - 'on'
+          - 'off'
+        to:
+          - 'on'
+          - 'off'
+    action:
+      - service: shell_command.reference_click
+      - delay:
+          milliseconds: 100
+      - service: shell_command.reference_kill
+      - delay:
+          milliseconds: 100
+      - choose:
+        - conditions:
+            - condition: state
+              entity_id: switch.wemo_monitors
+              state: 'on'
+          sequence:
+            - service: shell_command.reference_monitors
+        default:
+          - service: shell_command.reference_headphones
+
+  - alias: turn_off_monitors
+    id: '9863921240123'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: switch.computer_imac
+        from: 'on'
+        to: 'off'
+        for:
+          minutes: 15
+    action:
+      - service: switch.turn_off
+        entity_id: switch.wemo_monitors
+
+    ####################################################
+    #                                                  #
+    #                       FAN 1                      #
+    #                                                  #
+    ####################################################
+
+  - alias: wemo_fan_turn_off
+    id: '0568618309657'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: switch.wemo_fan
+        from: 'off'
+        to: 'on'
+        for:
+          hours: "{{ states('input_number.wemo_fan_timer') | int }}"
+      - platform: state
+        entity_id: switch.computer_imac
+        from: 'on'
+        to: 'off'
+        for:
+          minutes: 15
+    action:
+      - service: switch.turn_off
+        entity_id: switch.wemo_fan
+
+    ####################################################
+    #                                                  #
+    #                       FAN 2                      #
+    #                                                  #
+    ####################################################
+
+  # - alias: sovrum_anslut_turn_off
+  #   id: '1050805589188'
+  #   initial_state: true
+  #   trigger:
+  #     - platform: state
+  #       entity_id: fan.sovrum_anslut
+  #       from: 'off'
+  #       to: 'on'
+  #       for:
+  #         hours: "{{ states('input_number.sovrum_anslut_timer') | int }}"
+  #   action:
+  #     - service: switch.turn_off
+  #       entity_id: fan.sovrum_anslut
+
+  # - alias: sovrum_anslut_turn_on_temp
+  #   id: '0099808622760'
+  #   initial_state: true
+  #   trigger:
+  #     - platform: numeric_state
+  #       entity_id: sensor.sensor_hall_temperature
+  #       above: 24
+  #   condition:
+  #     condition: and
+  #     conditions:
+  #       - condition: time
+  #         after: '20:00:00'
+  #         before: '07:00:00'
+  #       - condition: state
+  #         entity_id:
+  #           - person.matte
+  #           - person.sanja
+  #         state: home
+  #   action:
+  #     - condition: state
+  #       entity_id: fan.sovrum_anslut
+  #       state: 'off'
+  #     - service: fan.turn_on
+  #       entity_id: fan.sovrum_anslut
+
+  # - alias: sovrum_anslut_oscillate
+  #   id: '9897303821028'
+  #   initial_state: true
+  #   trigger:
+  #     - platform: state
+  #       entity_id: input_boolean.sovrum_anslut_oscillate
+  #   action:
+  #     - service: remote.send_command
+  #       data:
+  #         entity_id: remote.broadlink_remote
+  #         command: !secret ir_fan_swing
+
+  # - alias: sovrum_anslut_speed
+  #   id: '9292376382008'
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: state
+  #       entity_id: fan.sovrum_anslut
+  #   action:
+  #     - choose:
+  #       - conditions: >
+  #           {{ trigger.from_state.attributes.speed == 'high' and trigger.to_state.attributes.speed == 'medium' or 
+  #           trigger.from_state.attributes.speed == 'medium' and trigger.to_state.attributes.speed == 'low' or 
+  #           trigger.from_state.attributes.speed == 'low' and trigger.to_state.attributes.speed == 'high' }}
+  #         sequence:
+  #           - repeat:
+  #               count: 2
+  #               sequence:
+  #                 - service: remote.send_command
+  #                   data:
+  #                     entity_id: remote.broadlink_remote
+  #                     command: !secret ir_fan_speed
+  #       - conditions: >
+  #           {{ trigger.from_state.attributes.speed == 'high' and trigger.to_state.attributes.speed == 'low' or 
+  #           trigger.from_state.attributes.speed == 'medium' and trigger.to_state.attributes.speed == 'high' or 
+  #           trigger.from_state.attributes.speed == 'low' and trigger.to_state.attributes.speed == 'medium' }}
+  #         sequence:
+  #           - service: remote.send_command
+  #             data:
+  #               entity_id: remote.broadlink_remote
+  #               command: !secret ir_fan_speed
+
+  # ###temp
+  # - alias: sovrum_anslut_speed_fix1_sync
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: template
+  #       value_template: >
+  #         {{ is_state('binary_sensor.gosund_fan', 'off') and not is_state('input_number.sovrum_anslut_speed', '0') }}
+  #   action:
+  #     - service: automation.turn_off
+  #       target:
+  #         entity_id: automation.sovrum_anslut_speed
+  #     - service: input_number.set_value
+  #       data:
+  #         entity_id: input_number.sovrum_anslut_speed
+  #         value: 0
+  #     - service: automation.turn_on
+  #       target:
+  #         entity_id: automation.sovrum_anslut_speed
+
+  # - alias: sovrum_anslut_speed_fix2_restore
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: template
+  #       value_template: >
+  #         {{ is_state('binary_sensor.gosund_fan', 'on') and is_state('input_number.sovrum_anslut_speed', '0') }}
+  #   action:
+  #     - service: automation.turn_off
+  #       target:
+  #         entity_id: automation.sovrum_anslut_speed
+  #     - service: input_number.set_value
+  #       data:
+  #         entity_id: input_number.sovrum_anslut_speed
+  #         value: 33
+  #     - service: automation.turn_on
+  #       target:
+  #         entity_id: automation.sovrum_anslut_speed
+
+    ####################################################
+    #                                                  #
+    #                   AIR PURIFIER                   #
+    #                                                  #
+    ####################################################
+
+  # - alias: air_purifier_speed
+  #   id: '3692857919366'
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: state
+  #       entity_id: input_number.air_purifier_speed
+  #   action:
+  #     - choose:
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set from_1 = ( trigger.from_state.state  | int > 0    and   trigger.from_state.state  | int <= 25  ) %}
+  #               {% set to_2   = ( trigger.to_state.state    | int > 25   and   trigger.to_state.state    | int <= 50  ) %}
+  #               {% set from_2 = ( trigger.from_state.state  | int > 25   and   trigger.from_state.state  | int <= 50  ) %}
+  #               {% set to_3   = ( trigger.to_state.state    | int > 50   and   trigger.to_state.state    | int <= 75  ) %}
+  #               {% set from_3 = ( trigger.from_state.state  | int > 50   and   trigger.from_state.state  | int <= 75  ) %}
+  #               {% set to_4   = ( trigger.to_state.state    | int > 75   and   trigger.to_state.state    | int <= 100 ) %}
+
+  #               {{ from_1 and to_2 or from_2 and to_3 or from_3 and to_4 }}
+  #         sequence:
+  #           - service: remote.send_command
+  #             data:
+  #               entity_id: remote.broadlink_remote
+  #               command: !secret ir_purifier_speed_up
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set from_1 = ( trigger.from_state.state  | int > 0    and   trigger.from_state.state  | int <= 25  ) %}
+  #               {% set to_3   = ( trigger.to_state.state    | int > 50   and   trigger.to_state.state    | int <= 75  ) %}
+
+  #               {{ from_1 and to_3 }}
+  #         sequence:
+  #           - repeat:
+  #               count: 2
+  #               sequence:
+  #                 - service: remote.send_command
+  #                   data:
+  #                     entity_id: remote.broadlink_remote
+  #                     command: !secret ir_purifier_speed_up
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set from_2 = ( trigger.from_state.state  | int > 25   and   trigger.from_state.state  | int <= 50  ) %}
+  #               {% set to_1   = ( trigger.to_state.state    | int > 0    and   trigger.to_state.state    | int <= 25  ) %}
+  #               {% set from_3 = ( trigger.from_state.state  | int > 50   and   trigger.from_state.state  | int <= 75  ) %}
+  #               {% set to_2   = ( trigger.to_state.state    | int > 25   and   trigger.to_state.state    | int <= 50  ) %}
+  #               {% set from_4 = ( trigger.from_state.state  | int > 75   and   trigger.from_state.state  | int <= 100 ) %}
+  #               {% set to_3   = ( trigger.to_state.state    | int > 50   and   trigger.to_state.state    | int <= 75  ) %}
+
+  #               {{ from_2 and to_1 or from_3 and to_2 or from_4 and to_3 }}
+  #         sequence:
+  #           - service: remote.send_command
+  #             data:
+  #               entity_id: remote.broadlink_remote
+  #               command: !secret ir_purifier_speed_down
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set from_3 = ( trigger.from_state.state  | int > 50   and   trigger.from_state.state  | int <= 75  ) %}
+  #               {% set to_1   = ( trigger.to_state.state    | int > 0    and   trigger.to_state.state    | int <= 25  ) %}
+  #               {% set from_4 = ( trigger.from_state.state  | int > 75   and   trigger.from_state.state  | int <= 100 ) %}
+  #               {% set to_2   = ( trigger.to_state.state    | int > 25   and   trigger.to_state.state    | int <= 50  ) %}
+
+  #               {{ from_3 and to_1 or from_4 and to_2 }}
+  #         sequence:
+  #           - repeat:
+  #               count: 2
+  #               sequence:
+  #                 - service: remote.send_command
+  #                   data:
+  #                     entity_id: remote.broadlink_remote
+  #                     command: !secret ir_purifier_speed_down
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set to_4   = ( trigger.to_state.state    | int > 75   and   trigger.to_state.state    | int <= 100 ) %}
+
+  #               {{ to_4 }}
+  #         sequence:
+  #           - service: remote.send_command
+  #             data:
+  #               entity_id: remote.broadlink_remote
+  #               command: !secret ir_purifier_turbo
+  #       - conditions:
+  #           - condition: template
+  #             value_template: >
+  #               {% set from_4 = ( trigger.from_state.state  | int > 75   and   trigger.from_state.state  | int <= 100 ) %}
+  #               {% set to_1   = ( trigger.to_state.state    | int > 0    and   trigger.to_state.state    | int <= 25  ) %}
+
+  #               {{ from_4 and to_1 }}
+  #         sequence:
+  #           - repeat:
+  #               count: 3
+  #               sequence:
+  #                 - service: remote.send_command
+  #                   data:
+  #                     entity_id: remote.broadlink_remote
+  #                     command: !secret ir_purifier_speed_down
+
+  # ###temp
+  # - alias: air_purifier_speed_fix1_sync
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: template
+  #       value_template: >
+  #         {{ is_state('binary_sensor.gosund_air_purifier', 'off') and not is_state('input_number.air_purifier_speed', '0') }}
+  #   action:
+  #     - service: automation.turn_off
+  #       target:
+  #         entity_id: automation.air_purifier_speed
+  #     - service: input_number.set_value
+  #       data:
+  #         entity_id: input_number.air_purifier_speed
+  #         value: 0
+  #     - service: automation.turn_on
+  #       target:
+  #         entity_id: automation.air_purifier_speed
+
+  # - alias: air_purifier_speed_fix2_restore
+  #   mode: queued
+  #   initial_state: true
+  #   trigger:
+  #     - platform: template
+  #       value_template: >
+  #         {{ is_state('binary_sensor.gosund_air_purifier', 'on') and is_state('input_number.air_purifier_speed', '0') }}
+  #   action:
+  #     - service: automation.turn_off
+  #       target:
+  #         entity_id: automation.air_purifier_speed
+  #     - service: input_number.air_purifier_speed
+  #       data:
+  #         entity_id: input_number.air_purifier_speed
+  #         value: 25
+  #     - service: automation.turn_on
+  #       target:
+  #         entity_id: automation.air_purifier_speed
+  # ###
+
+    ####################################################
+    #                                                  #
+    #                      TABLET                      #
+    #                                                  #
+    ####################################################
+
+  - alias: fullykiosk_screensaver
+    id: '9452750674803'
+    mode: restart
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.sensor_hall_motion
+        from: 'off'
+        to: 'on'
+      - platform: state
+        entity_id: light.hall
+        from: 'on'
+        to: 'off'
+    action:
+      - choose:
+        - conditions: >
+            {{ trigger.entity_id == 'binary_sensor.sensor_hall_motion' }}
+          sequence:
+            - service: switch.turn_off
+              entity_id: switch.galaxy_tab_a_screensaver
+            - service: light.turn_on
+              data:
+                entity_id: light.galaxy_tab_a_screen
+                brightness_pct: >
+                  {{ 90 if is_state('sun.sun', 'above_horizon') else 60 }}
+        default:
+          - service: switch.turn_on
+            entity_id: switch.galaxy_tab_a_screensaver
+          - delay:
+              minutes: 15
+          - service: browser_mod.close_popup
+            data:
+              deviceID: c2080cea-6627150a
+
+    ####################################################
+    #                                                  #
+    #                    HDMI / TV                     #
+    #                                                  #
+    ####################################################
+
+  - alias: hdmi_input_select
+    id: '9559814521978'
+    mode: parallel
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: input_select.hdmi
+      - platform: state
+        entity_id: input_select.hdmi2
+    action:
+      - service: media_player.select_source
+        data:
+          entity_id: >
+            {% if trigger.entity_id == 'input_select.hdmi' %}
+              media_player.sony_bravia_tv
+            {% elif trigger.entity_id == 'input_select.hdmi2' %}
+              media_player.samsung_tv
+            {% endif %}
+          source: >
+            {{ states(trigger.entity_id) }}
+
+  - alias: turn_on_tv_fail_safe
+    id: '0703991107325'
+    mode: parallel
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: call_service
+        event_data:
+          domain: media_player
+          service: turn_on
+          service_data:
+            entity_id: media_player.sony_bravia_tv
+      - platform: event
+        event_type: call_service
+        event_data:
+          domain: media_player
+          service: turn_on
+          service_data:
+            entity_id: media_player.samsung_tv
+    action:
+      - service: media_player.turn_on
+        data:
+          entity_id: >
+            {% set trigger = trigger.event.data.service_data.entity_id %}
+            {% if trigger == 'media_player.sony_bravia_tv' %}
+              media_player.vardagsrum
+            {% elif trigger == 'media_player.samsung_tv' %}
+              media_player.sovrum
+            {% endif %}
+      # - delay:
+      #     seconds: 1
+      # - repeat:
+      #     count: 2
+      #     sequence:
+      - service: remote.send_command
+        data:
+          entity_id: >
+            {% set trigger = trigger.event.data.service_data.entity_id %}
+            {% if trigger == 'media_player.sony_bravia_tv' %}
+              remote.vardagsrum
+            {% elif trigger == 'media_player.samsung_tv' %}
+              remote.sovrum
+            {% endif %}
+          command:
+            - menu
+            - menu
+
+    ####################################################
+    #                                                  #
+    #                  LAUNDRY TIMER                   #
+    #                                                  #
+    ####################################################
+
+  - alias: laundry_display
+    id: '4792508317061'
+    mode: restart
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.laundry_time_trigger
+        to: 'on'
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.laundry_display
+      - delay:
+          hours: 4
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.laundry_display
+
+  - alias: laundry_alert
+    id: '3403466403120'
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.laundry
+    action:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.c2080cea_6627150a
+          media_content_id: /local/sound/timer.mp3
+          media_content_type: music
+      - delay:
+          seconds: 2
+      - service: tts.cloud_say
+        data:
+          entity_id: media_player.c2080cea_6627150a
+          message: >
+            {{ ['Tvätten är färdig', 'Tvätten är klar', 'Dags att gå ner!'] | random }}
+          language: sv-SE
+      - service: notify.mobile_app_mattias_iphone_ios
+        data:
+          message: >
+            {{'\U0001F9FA'}} {{ ['Tvätten är färdig', 'Tvätten är klar', 'Dags att gå ner'] | random }}
+      - service: shell_command.imac_notify_laundry
+      - delay:
+          seconds: 3
+
+    ####################################################
+    #                                                  #
+    #                      VACUUM                      #
+    #                                                  #
+    ####################################################
+
+  - alias: vacuum_last_cleaned
+    id: '8482831137092'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: vacuum.valetudo_robot
+        from: cleaning
+        to: returning
+    action:
+      - service: notify.vacuum_last_cleaned
+        data:
+          message: ''
+
+  - alias: roborock_speed
+    id: '0054872718027'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: input_select.roborock_speed
+    action:
+      - service: vacuum.set_fan_speed
+        data:
+          entity_id: vacuum.valetudo_robot
+          fan_speed: >
+            {% if is_state(trigger.entity_id, 'Tyst') %} low
+            {% elif is_state(trigger.entity_id, 'Standard') %} medium
+            {% elif is_state(trigger.entity_id, 'Medium') %} high
+            {% elif is_state(trigger.entity_id, 'Turbo') %} max
+            {% elif is_state(trigger.entity_id, 'Av') %} off
+            {% endif %}
+
+  - alias: roborock_speed_update
+    id: '3154087574817'
+    initial_state: true
+    trigger:
+      - platform: state
+        entity_id: vacuum.valetudo_robot
+      - platform: homeassistant
+        event: start
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.roborock_speed
+          option: >
+            {% set entity_id = 'vacuum.valetudo_robot' %}
+            {% if is_state_attr(entity_id, 'fan_speed', 'low') %} Tyst
+            {% elif is_state_attr(entity_id, 'fan_speed', 'medium') %} Standard
+            {% elif is_state_attr(entity_id, 'fan_speed', 'high') %} Medium
+            {% elif is_state_attr(entity_id, 'fan_speed', 'max') %} Turbo
+            {% elif is_state_attr(entity_id, 'fan_speed', 'off') 
+              or state_attr(entity_id, 'fan_speed') == None %} Av
+            {% endif %}
+
+      ####################################################
+      #                                                  #
+      #                CONDITIONAL MEDIA                 #
+      #                                                  #
+      ####################################################
+
+  - alias: conditional_media_playing
+    id: '5557842567134'
+    initial_state: true
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - media_player.vardagsrum
+          - media_player.sovrum
+          - media_player.spotify
+          - media_player.kok
+        to: playing
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.conditional_media
+          option: >
+            {{ trigger.to_state.name }}
+
+  - alias: conditional_media_paused_idle
+    id: '3603627624707'
+    initial_state: true
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - media_player.vardagsrum
+          - media_player.sovrum
+          - media_player.spotify
+          - media_player.kok
+        to:
+          ['off', 'idle', 'standby']
+      - platform: state
+        entity_id:
+          - media_player.vardagsrum
+          - media_player.sovrum
+          - media_player.spotify
+          - media_player.kok
+        to: paused
+        for:
+          minutes: 10
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.conditional_media
+          option: >
+            {% set media_players = 
+              [states.media_player.vardagsrum, states.media_player.sovrum, 
+               states.media_player.spotify, states.media_player.kok] %}
+            {% if media_players | selectattr('state','eq','playing') | list | count == 0 %}
+              {% if media_players | selectattr('state','eq','paused') | list | count == 0 %}
+              Senast nedladdat
+              {% else %}
+              {{ media_players | selectattr('state','eq','paused') | map(attribute='name') | max }}
+              {% endif %}
+            {% else %}
+            {{ media_players | selectattr('state','eq','playing') | map(attribute='name') | max }}
+            {% endif %}
+
+  - alias: conditional_media_all_off
+    id: '6882931899148'
+    initial_state: true
+    trigger:
+      - platform: template
+        value_template: >
+          {{ is_state('media_player.vardagsrum', 'idle') and
+          is_state('media_player.sovrum', 'idle') and
+          is_state('media_player.spotify', 'idle') and
+          is_state('media_player.kok', 'off') 
+          or
+          is_state('media_player.sony_bravia_tv', 'off') and
+          is_state('media_player.samsung_tv', 'off') and
+          is_state('media_player.kok', 'off') }}
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.conditional_media
+          option: Senast nedladdat
+
+  - alias: conditional_media_atv1_fix
+    id: '8872219660798'
+    initial_state: true
+    trigger:
+      - platform: template
+        value_template: >
+          {{ is_state('media_player.vardagsrum', 'paused') and 
+          is_state_attr('media_player.vardagsrum', 'media_title', 'No title') }}
+        for:
+          seconds: 5
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.conditional_media
+          option: >
+            {% set media_players = 
+              [states.media_player.vardagsrum, states.media_player.spotify, 
+               states.media_player.kok] %}
+            {% if media_players | selectattr('state','eq','playing') | list | count == 0 %}
+              {% if media_players | selectattr('state','eq','paused') | list | count == 0 %}
+              Senast nedladdat
+              {% elif is_state('media_player.vardagsrum', 'paused') and 
+              is_state_attr('media_player.vardagsrum', 'media_title', 'No title') or
+              is_state('media_player.sovrum', 'paused') and 
+              is_state_attr('media_player.sovrum', 'media_title', 'No title')
+              %}
+              Senast nedladdat
+              {% else %}
+              {{ media_players | selectattr('state','eq','paused') | map(attribute='name') | max }}
+              {% endif %}
+            {% else %}
+            {{ media_players | selectattr('state','eq','playing') | map(attribute='name') | max }}
+            {% endif %}
+
+  - alias: conditional_media_atv2_fix
+    id: '4497990852096'
+    initial_state: true
+    trigger:
+      - platform: template
+        value_template: >
+          {{ is_state('media_player.sovrum', 'paused') and 
+          is_state_attr('media_player.sovrum', 'media_title', 'No title') }}
+        for:
+          seconds: 5
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.conditional_media
+          option: >
+            {% set media_players = 
+              [states.media_player.vardagsrum, states.media_player.spotify, 
+               states.media_player.kok] %}
+            {% if media_players | selectattr('state','eq','playing') | list | count == 0 %}
+              {% if media_players | selectattr('state','eq','paused') | list | count == 0 %}
+              Senast nedladdat
+              {% elif is_state('media_player.vardagsrum', 'paused') and 
+              is_state_attr('media_player.vardagsrum', 'media_title', 'No title') or
+              is_state('media_player.sovrum', 'paused') and 
+              is_state_attr('media_player.sovrum', 'media_title', 'No title')
+              %}
+              Senast nedladdat
+              {% else %}
+              {{ media_players | selectattr('state','eq','paused') | map(attribute='name') | max }}
+              {% endif %}
+            {% else %}
+            {{ media_players | selectattr('state','eq','playing') | map(attribute='name') | max }}
+            {% endif %}

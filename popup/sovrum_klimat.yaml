@@ -1,0 +1,43 @@
+action: fire-dom-event
+browser_mod:
+  command: popup
+  title: Klimat
+  style:
+    hui-vertical-stack-card:
+      $hui-entities-card$ : |
+        #states {
+          padding-top: 0.5em;
+          padding-bottom: 1.2em;
+        }
+  card:
+    type: vertical-stack
+    cards:
+
+      - type: thermostat
+        entity: climate.luftkylare
+
+      - type: entities
+        card_mod:
+          class: content
+        entities:
+          - entity: sensor.broadlink_rm4_pro_temperature
+            name: Rumstemperatur
+          - entity: sensor.broadlink_rm4_pro_humidity
+            name: Luftfuktighet
+
+      - type: custom:mini-graph-card
+        entities:
+          - color: '#385581'
+            entity: sensor.broadlink_rm4_pro_temperature
+        line_width: 6
+        hour24: true
+        group: true
+        align_icon: left
+        align_state: right
+        align_header: left
+        hours_to_show: 24
+        show:
+          {fill: fade, icon: false, name: false, state: false, 
+          name_adaptive_color: false, labels: hover, legend: false}
+        tap_action:
+          action: none
